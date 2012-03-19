@@ -1,0 +1,125 @@
+diff --git a/usr.sbin/pc-sysinstall/backend/functions-extractimage.sh b/usr.sbin/pc-sysinstall/backend/functions-extractimage.sh
+index 5d32466..939c192 100755
+--- a/usr.sbin/pc-sysinstall/backend/functions-extractimage.sh
++++ b/usr.sbin/pc-sysinstall/backend/functions-extractimage.sh
+@@ -176,6 +176,33 @@ start_extract_split()
+   echo_log "pc-sysinstall: Extraction Finished"
+ };
+ 
++# Performs the extraction of data to disk from a directory with split files
++start_extract_9_split()
++{
++  if [ -z "${INSDIR}" ]
++  then
++    exit_err "ERROR: Called extraction with no install directory set!"
++  fi
++
++  echo_log "pc-sysinstall: Starting Extraction"
++
++  # Used by install.sh
++  DESTDIR="${FSMNT}"
++  export DESTDIR
++
++  HERE=`pwd`
++  ARCHIVES=`ls -d ${INSDIR}/*|grep 'txz'`
++  cd ${FSMNT}
++  for archive in ${ARCHIVES}
++  do
++    echo_log "Extracting" `basename ${archive}`
++    tar -C "${FSMNT}" --chroot -p -x -f ${archive}
++  done
++  cd "${HERE}"
++  
++  echo_log "pc-sysinstall: Extraction Finished"
++}
++
+ # Function which will attempt to fetch the install file before we start
+ # the install
+ fetch_install_file()
+@@ -279,6 +306,74 @@ EOF
+   export INSFILE="${OUTFILE}"
+ }
+ 
++# Function which will download freebsd install files for freebsd > 9.0
++fetch_split_9_files()
++{
++  get_ftpHost
++  if [ -z "$VAL" ]
++  then
++    exit_err "ERROR: Install medium was set to ftp, but no ftpHost was provided!" 
++  fi
++  FTPHOST="${VAL}"
++
++  get_ftpDir
++  if [ -z "$VAL" ]
++  then
++    exit_err "ERROR: Install medium was set to ftp, but no ftpDir was provided!" 
++  fi
++  FTPDIR="${VAL}"
++
++  # Check if we have a /usr partition to save the download
++  if [ -d "${FSMNT}/usr" ]
++  then
++    OUTFILE="${FSMNT}/usr/.fetch-usr"
++  else
++    OUTFILE="${FSMNT}/.fetch-all"
++  fi
++  export DISTRIBUTIONS="kernel.txz base.txz doc.txz games.txz"
++  if [ "${FBSD_ARCH}" = "amd64" ]
++  then
++    DISTRIBUTIONS="$DISTRIBUTIONS lib32.txz"
++  fi
++
++  for d in ${DISTRIBUTIONS}
++  do
++    mkdir -p "${OUTFILE}"
++  done
++
++
++  NETRC="${OUTFILE}/.netrc"
++  cat <<EOF >"${NETRC}"
++machine ${FTPHOST}
++login anonymous
++password anonymous
++macdef INSTALL
++bin
++prompt
++cd ${FTPDIR}/
++lcd ${OUTFILE}/
++EOF
++
++  for d in ${DISTRIBUTIONS}
++  do
++    cat <<EOF >>"${NETRC}"
++get $d
++EOF
++  done
++
++  cat <<EOF >>"${NETRC}"
++bye
++
++
++EOF
++
++  # Fetch the files via ftp
++  echo "$ INSTALL" | ftp -N "${NETRC}" "${FTPHOST}"
++
++  # Done fetching, now reset the INSFILE to our downloaded archived
++  export INSFILE="${OUTFILE}"
++}
++
+ # Function which does the rsync download from the server specified in cfg
+ start_rsync_copy()
+ {
+@@ -429,6 +524,11 @@ init_extraction()
+ 
+         INSDIR="${INSFILE}" ; export INSDIR
+         start_extract_split
++      elif [ "$PACKAGETYPE" = "split_9" ]
++      then
++        fetch_split_9_files
++        INSDIR="${INSFILE}" ; export INSDIR
++        start_extract_9_split
+       else
+         fetch_install_file
+         start_extract_uzip_tar 
