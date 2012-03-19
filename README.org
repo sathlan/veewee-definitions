@@ -1,0 +1,8 @@
+* Veewee Definitions.
+Some basebox definitions for Vagrant created using
+[[veewee-old][https://github.com/jedi4ever/veewee-old]]
+
+** Freebsd 9.0
+** Debian 6.0.4
+** Debian 6.0.3
+
